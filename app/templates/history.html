@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Check-in history (last 200)</h2>
+  <table>
+    <tr><th>ID</th><th>Visitor Badge</th><th>Name</th><th>Firm</th><th>Checked in</th><th>Checked out</th><th>Dwell</th></tr>
+    {% for v in rows %}
+    <tr>
+      <td>{{ v['badge'] }}</td>
+      <td>{{ v['visitor_badge'] or '-' }}</td>
+      <td>{{ v['name'] }}</td>
+      <td>{{ v['firm'] or '-' }}</td>
+      <td>{{ v['checked_in_at'] | fmt }}</td>
+      <td>{{ v['checked_out_at'] | fmt if v['checked_out_at'] else 'still inside' }}</td>
+      <td>{{ v['checked_in_at'] | dwell(v['checked_out_at']) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">No visits recorded.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

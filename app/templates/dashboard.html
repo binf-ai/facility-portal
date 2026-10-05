@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% set show_status = user.role in ('security', 'viewer') %}
+<div class="card">
+  <div class="count">{{ count }}</div>
+  <div class="muted">currently inside &mdash; auto-refreshes every 30 s when nothing is being edited</div>
+</div>
+
+<div class="card">
+  <h2>Inside now</h2>
+  {% for p in inside %}
+    <div class="person-row">
+      <div>
+        <strong>{{ p['name'] }}</strong> &mdash; ID {{ p['badge'] }} &mdash; {{ p['firm'] }}<br>
+        <span class="muted">checked in {{ p['open_since'] | fmt }} &middot; dwell {{ p['open_since'] | dwell }}</span>
+      </div>
+      {% if 'checkin' in perms %}
+      <form method="post" action="/checkout/{{ p['open_visit'] }}">
+        <button class="danger">Check Out &#x1F194;{{ p['vb'] or '-' }}</button>
+      </form>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="muted">Nobody inside.</div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>Search</h2>
+  <form class="inline" method="get" action="/">
+    <input name="q" value="{{ q }}" placeholder="Name, ID, or firm" style="min-width:260px">
+    <button type="submit">Search</button>
+    <button type="submit" onclick="this.form.q.value=''">Clear</button>
+  </form>
+</div>
+
+{% if 'roster_write' in perms %}
+<div class="card">
+  <details>
+    <summary>Click to Add Contractor</summary>
+    <form class="inline" method="post" action="/roster" style="margin-top:12px">
+      <input name="name" placeholder="Full name" required>
+      <input name="badge" placeholder="ID" required>
+      <input name="firm" placeholder="Contractor firm" required>
+      <button class="small">Add person</button>
+    </form>
+  </details>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>{{ rows|length }} {{ 'people' if rows|length != 1 else 'person' }}{% if 'roster_write' in perms %} (incl. inactive){% endif %}</h2>
+  <table>
+    <tr>
+      <th>Name</th><th>ID</th><th>Firm</th>
+      {% if show_status %}<th>Status</th>{% endif %}
+      {% if perms %}<th>Actions</th>{% endif %}
+    </tr>
+    {% for p in rows %}
+      {% if 'roster_write' in perms or p['active'] %}
+      <tr>
+        <td>{{ p['name'] }}{% if not p['active'] %} <span class="muted">(inactive)</span>{% endif %}</td>
+        <td>{{ p['badge'] }}</td>
+        <td>{{ p['firm'] }}</td>
+        {% if show_status %}
+        <td>{% if p['open_visit'] %}<span class="inside">inside</span>{% else %}<span class="muted">not inside</span>{% endif %}</td>
+        {% endif %}
+        {% if perms %}
+        <td class="actions">
+          {% if 'checkin' in perms %}
+            {% if p['open_visit'] %}
+              <form method="post" action="/checkout/{{ p['open_visit'] }}"><button class="small danger">Check Out &#x1F194;{{ p['vb'] or '-' }}</button></form>
+            {% elif p['active'] %}
+              <button class="small green" onclick="openVbModal({{ p['id'] }})">Check In</button>
+            {% endif %}
+          {% endif %}
+          {% if 'roster_write' in perms %}
+            <a class="btn" href="/roster/{{ p['id'] }}/edit">Edit</a>
+            {% if not p['open_visit'] %}
+              <form method="post" action="/roster/{{ p['id'] }}/toggle"><button class="small ghost">{{ 'Deactivate' if p['active'] else 'Reactivate' }}</button></form>
+            {% endif %}
+            {% if p['visits_count'] == 0 %}
+              <form method="post" action="/roster/{{ p['id'] }}/delete" onsubmit="return confirm('Delete {{ p['name'] }}?')"><button class="small danger">Delete</button></form>
+            {% endif %}
+          {% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% endif %}
+    {% else %}
+      <tr><td colspan="{{ 3 + (1 if show_status else 0) + (1 if perms else 0) }}" class="muted">No matches.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% if 'checkin' in perms %}
+<div class="modal" id="vbModal" hidden>
+  <div class="modal-box">
+    <h3>Check In &mdash; Visitor's Badge</h3>
+    <form method="post" action="/checkin">
+      <input type="hidden" name="personnel_id" id="vbPid">
+      <div class="form-row"><input name="visitor_badge" id="vbInput" placeholder="Visitor's Badge number" required></div>
+      <div class="actions">
+        <button class="green" type="submit">Confirm Check In</button>
+        <button class="ghost" type="button" onclick="closeVbModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openVbModal(pid) {
+    document.getElementById('vbPid').value = pid;
+    document.getElementById('vbModal').hidden = false;
+    document.getElementById('vbInput').focus();
+  }
+  function closeVbModal() { document.getElementById('vbModal').hidden = true; }
+  document.getElementById('vbModal').addEventListener('click', e => { if (e.target.id === 'vbModal') closeVbModal(); });
+</script>
+{% endif %}
+
+<script>
+  // Auto-refresh every 30 s unless an edit field has unsaved changes.
+  let dirty = false;
+  document.querySelectorAll('input[name]').forEach(i => {
+    const initial = i.value;
+    i.addEventListener('input', () => { if (i.value !== initial) dirty = true; });
+  });
+  setInterval(() => {
+    const modal = document.getElementById('vbModal');
+    if (!dirty && (!modal || modal.hidden)) location.reload();
+  }, 30000);
+</script>
+{% endblock %}

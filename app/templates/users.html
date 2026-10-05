@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Create user</h2>
+  <form class="inline" method="post" action="/users">
+    <input name="username" placeholder="Username" required>
+    <input name="password" type="password" placeholder="Password" required>
+    <select name="role"><option value="viewer">viewer</option><option value="admin">admin</option><option value="police">police</option><option value="security">security</option></select>
+    <button type="submit">Create</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Accounts</h2>
+  <table>
+    <tr><th>Username</th><th>Role</th><th>Change password</th></tr>
+    {% for u in rows %}
+    <tr>
+      <td>{{ u['username'] }}</td>
+      <td>{{ u['role'] }}</td>
+      <td>
+        <form class="inline" method="post" action="/users/{{ u['id'] }}/password">
+          <input name="password" placeholder="New password" required>
+          <button class="small">Update</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

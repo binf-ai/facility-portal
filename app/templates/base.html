@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Facility Portal{% endblock %}</title>
+{% block head %}{% endblock %}
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --ink:#1c2430; --muted:#6b7280; --accent:#2563eb; --border:#e5e7eb; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:#111827; color:#fff; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  nav { display:flex; align-items:center; gap:16px; }
+  nav a { color:#cbd5e1; text-decoration:none; font-size:14px; }
+  nav a:hover { color:#fff; }
+  main { max-width:900px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:16px; }
+  h2 { margin:0 0 12px; font-size:15px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  .count { font-size:28px; font-weight:700; color:var(--accent); }
+  input, select { padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 14px; font-size:14px; cursor:pointer; }
+  button.small { padding:5px 10px; font-size:13px; }
+  form.inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .flash { background:#fef3c7; border:1px solid #fde68a; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:14px; }
+  .role { font-size:12px; color:#cbd5e1; }
+  .muted { color:var(--muted); font-size:13px; }
+  .inside { color:#166534; font-weight:600; }
+  button.ghost { background:#e5e7eb; color:var(--ink); }
+  button.green { background:#16a34a; color:#fff; }
+  button.danger { background:#dc2626; color:#fff; }
+  a.btn { display:inline-block; background:#e5e7eb; color:var(--ink); border-radius:6px; padding:5px 10px; font-size:13px; text-decoration:none; }
+  .actions { display:flex; gap:8px; align-items:center; }
+  .actions form { margin:0; }
+  .person-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .person-row:last-child { border-bottom:0; }
+  .form-row { margin-bottom:10px; }
+  .form-row input { width:100%; }
+  summary { cursor:pointer; font-weight:600; font-size:14px; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; }
+  .modal[hidden] { display:none; }
+  .modal-box { background:#fff; border:1px solid var(--border); border-radius:10px; padding:18px 20px; width:340px; box-shadow:0 8px 24px rgba(0,0,0,.25); }
+  .modal-box h3 { margin:0 0 12px; font-size:15px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Secure Facility Portal</h1>
+  {% if user %}
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/history">History</a>
+    {% if 'users' in perms %}<a href="/users">Users</a>{% endif %}
+    <span class="role">{{ user.username }} ({{ user.role }})</span>
+    <a href="/logout">Logout</a>
+  </nav>
+  {% endif %}
+</header>
+<main>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

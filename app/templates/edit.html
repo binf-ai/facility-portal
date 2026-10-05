@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ p['name'] }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:420px">
+  <h2>Edit &mdash; {{ p['name'] }}</h2>
+  <form method="post" action="/roster/{{ p['id'] }}">
+    <div class="form-row"><input name="name" value="{{ p['name'] }}" placeholder="Full name" required></div>
+    <div class="form-row"><input name="badge" value="{{ p['badge'] }}" placeholder="ID" required></div>
+    <div class="form-row"><input name="firm" value="{{ p['firm'] }}" placeholder="Contractor firm" required></div>
+    <div class="actions">
+      <button type="submit">Save</button>
+      <a class="btn" href="/">Back</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

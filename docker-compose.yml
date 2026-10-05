@@ -1,0 +1,14 @@
+services:
+  portal:
+    build: .
+    container_name: facility-portal
+    ports:
+      - "8590:8590"
+    volumes:
+      - portal_data:/data
+    environment:
+      - TZ=America/New_York
+    restart: unless-stopped
+
+volumes:
+  portal_data:
