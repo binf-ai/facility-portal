@@ -11,7 +11,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-DATA_DIR = os.environ.get("DATA_DIR", "/data")
+# On Linux/Docker the default is /data; on Windows it defaults to a local
+# "data" folder unless DATA_DIR is set (IIS service deployments set it explicitly).
+DATA_DIR = os.environ.get("DATA_DIR") or ("data" if os.name == "nt" else "/data")
 DB_PATH = os.path.join(DATA_DIR, "portal.db")
 TZ = ZoneInfo(os.environ.get("TZ", "America/New_York"))
 SESSION_MAX_AGE = 12 * 3600
