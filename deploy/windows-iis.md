@@ -1,69 +1,86 @@
-# Running on Windows IIS
+# Running natively on Windows IIS
 
-IIS cannot host an ASGI app directly — there is no IIS module for Python/ASGI. The supported pattern is:
+IIS has no Python/ASGI module, so FastAPI cannot be hosted directly. The native path is IIS's own Python handler — **wfastcgi (FastCGI)** or **ISAPI** — which speaks WSGI. FastAPI is ASGI, so `wsgi.py` bridges it with `a2wsgi`.
 
-**uvicorn runs as a Windows service → IIS reverse-proxies to it.**
-
-The app itself needs no changes; `run.py` is the service entry point.
+The bridge is safe here: the app uses no background tasks, no websockets, no lifespan startup, and `start_response` is called with the 3-arg form that wfastcgi implements. Verified end-to-end through `a2wsgi.ASGIMiddleware` (login POST → 303, cookie session → dashboard 200, check-in POST, history 200).
 
 ## 1. Install
 
 ```powershell
-# on the server
 git clone https://github.com/binf-ai/facility-portal C:\portal
 cd C:\portal
 python -m venv venv
-venv\Scripts\pip install -r requirements.txt
+venv\Scripts\pip install -r requirements.txt   # includes a2wsgi, wfastcgi, pywin32
 ```
 
-## 2. Run uvicorn as a Windows service (NSSM)
+Use **Python 3.13 or older** — `a2wsgi` is tested through 3.13.
 
-NSSM keeps it running across reboots and restarts it on crash — IIS app pools are not suitable for a long-lived ASGI server.
+## 2. Enable wfastcgi in IIS
 
 ```powershell
-# download nssm: https://nssm.cc/download
-nssm install FacilityPortal "C:\portal\venv\Scripts\python.exe" "C:\portal\run.py"
-nssm set FacilityPortal AppDirectory C:\portal
-nssm set FacilityPortal AppEnvironmentExtra DATA_DIR=C:\portal\data TZ=America/New_York PORT=8590
-nssm start FacilityPortal
+# run once, as administrator
+C:\portal\venv\Scripts\wfastcgi-enable
 ```
 
-Notes:
-- `PORTAL_HOST` defaults to `127.0.0.1` — keep it local so only IIS is exposed.
-- `DATA_DIR` holds `portal.db` and `secret.key`; point it at a folder the service can write to.
-- The app is single-process/SQLite — one service instance is enough.
+Requires the IIS **CGI** feature (Application Development > CGI) and ISAPI Filters.
 
-## 3. IIS as reverse proxy
+## 3. IIS site configuration
 
-Install **URL Rewrite** and **Application Request Routing (ARR)** on IIS, then:
-
-1. Enable proxy: IIS manager → Application Request Routing Cache → Server Proxy Settings → Enable proxy.
-2. Add a site (e.g. `portal.yourdomain.com`) with this `web.config`:
+Create a site pointed at `C:\portal` with this `web.config`:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <system.webServer>
-    <rewrite>
-      <rules>
-        <rule name="Proxy to uvicorn" stopProcessing="true">
-          <match url=".*" />
-          <action type="Rewrite" url="http://127.0.0.1:8590/{R:0}" />
-        </rule>
-      </rules>
-    </rewrite>
+    <handlers>
+      <add name="Python_FastCGI"
+           path="handler.fcgi"
+           verb="*"
+           modules="FastCgiModule"
+           scriptProcessor="C:\portal\venv\Scripts\python.exe|C:\portal\venv\Lib\site-packages\wfastcgi.py"
+           resourceFilter="Any" />
+    </handlers>
   </system.webServer>
+  <appSettings>
+    <add key="wfastcgi.application" value="wsgi.application" />
+    <add key="wfastcgi.pythonExecutablePath" value="C:\portal\venv\Scripts\python.exe" />
+    <add key="wfastcgi.scriptPath" value="C:\portal\wsgi.py" />
+    <add key="wfastcgi.wfastcgiLogPath" value="C:\portal\data\wfastcgi.log" />
+    <add key="DATA_DIR" value="C:\portal\data" />
+  </appSettings>
 </configuration>
 ```
 
-HTTPS termination, auth, and Windows group restrictions can all be handled at the IIS layer if you want them; the app's own login still applies.
+Requests route to `handler.fcgi`; the app sees the real path via `PATH_INFO`, so all routes (`/login`, `/checkin`, `/history`, ...) work unchanged. For clean URLs, add a URL Rewrite rule rewriting `.*` to `handler.fcgi/{R:0}`.
 
-## 4. Alternative: skip IIS entirely
+## 4. Permissions
 
-If IIS is not a hard requirement, the simplest Windows deployment is just the NSSM service serving `http://server:8590` directly, or Docker Desktop with the existing `docker-compose.yml`. IIS only adds value here as the front door (TLS, domain, corporate auth).
+The IIS worker process needs write access to `C:\portal\data` — `portal.db` and `secret.key` are created there on first run:
 
-## Things that changed in the app for Windows
+```powershell
+icacls C:\portal\data /grant "IIS AppPool\DefaultAppPool:(OI)(CI)M"
+```
 
-- `DATA_DIR` now defaults to a local `data/` folder on Windows instead of `/data` (Docker/Linux behavior unchanged).
-- `run.py` added as the service entry point (reads `PORT` / `PORTAL_HOST` env vars).
-- `zoneinfo` on Windows needs the `tzdata` package — already in `requirements.txt`.
+`DATA_DIR` is read from the environment; `wsgi.py` defaults it to the repo's `data/` folder when not set.
+
+## 5. Alternative: ISAPI instead of FastCGI
+
+If FastCGI is not permitted, `isapi_wsgi` (PyPI) runs the same `wsgi.application` as an ISAPI extension — same bridge, same `DATA_DIR` rules, only the IIS handler registration differs.
+
+## Known limits of native IIS hosting
+
+- **App pool recycling** kills the Python process. `portal.db` and `secret.key` survive (they're files), but in-memory state does not. Set recycling to a window you control, or disable it.
+- **Single process, SQLite** — fine at this scale; do not run multiple worker processes against the same DB file.
+- `a2wsgi` is synchronous per request; concurrency comes from IIS's FastCGI process pool (`maxInstances`), not from async inside the app.
+
+## Alternative (not native): reverse proxy
+
+If the native handler is blocked by policy, `run.py` + NSSM as a Windows service with IIS reverse-proxying to `http://127.0.0.1:8590` is the fallback — but that requires running a service, which is what this deployment rules out. Docker Desktop with the existing `docker-compose.yml` is the other option.
+
+## What changed in the app for Windows
+
+- `wsgi.py` — ASGI→WSGI bridge entry point for IIS's Python handler.
+- `DATA_DIR` defaults to a local `data/` folder on Windows instead of `/data` (Docker/Linux unchanged).
+- `requirements.txt` adds `a2wsgi` plus `wfastcgi`/`pywin32` on `win32` only.
+- `run.py` remains for service/Docker use (reads `PORT` / `PORTAL_HOST`).
+- `zoneinfo` on Windows needs `tzdata` — already in `requirements.txt`.
